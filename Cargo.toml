@@ -24,7 +24,7 @@ all-features = true
 
 [dependencies]
 url = "2.1.1"
-serde = { version = "1.0.104", features = ["derive"] }
+serde = { version = "1.0.104", features = ["derive", "rc"] }
 serde_json = { version = "1.0.48", features = ["raw_value"] }
 unicode-id-start = "1"
 if_chain = "1.0.0"
