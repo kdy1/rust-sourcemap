@@ -10,7 +10,10 @@ use crate::{
     vlq::parse_vlq_segment_into,
     Error, RawToken, Result,
 };
-use std::collections::{BTreeSet, HashMap};
+use std::{
+    collections::{BTreeSet, HashMap},
+    sync::Arc,
+};
 
 use bitvec::{order::Lsb0, vec::BitVec, view::BitView};
 use serde::{Deserialize, Serialize};
@@ -20,17 +23,17 @@ use serde_json::value::RawValue;
 pub struct RawSourceMap<'a> {
     pub(crate) version: Option<u32>,
     #[serde(default, borrow)]
-    pub(crate) file: Option<&'a RawValue>,
+    pub(crate) file: Option<MaybeRawValue<'a, Str>>,
     #[serde(borrow)]
-    pub(crate) sources: MaybeRawValue<'a, Vec<&'a RawValue>>,
+    pub(crate) sources: MaybeRawValue<'a, Vec<StrValue<'a>>>,
     #[serde(default, borrow)]
-    pub(crate) source_root: Option<&'a RawValue>,
+    pub(crate) source_root: Option<StrValue<'a>>,
     #[serde(borrow)]
-    pub(crate) sources_content: MaybeRawValue<'a, Vec<Option<&'a RawValue>>>,
+    pub(crate) sources_content: MaybeRawValue<'a, Vec<Option<StrValue<'a>>>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) sections: Option<Vec<RawSection<'a>>>,
     #[serde(borrow)]
-    pub(crate) names: MaybeRawValue<'a, Vec<&'a RawValue>>,
+    pub(crate) names: MaybeRawValue<'a, Vec<StrValue<'a>>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) range_mappings: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -69,7 +72,7 @@ impl<'a> DecodedMap<'a> {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 #[serde(untagged)]
 pub(crate) enum MaybeRawValue<'a, T> {
     RawValue(#[serde(borrow)] &'a RawValue),
@@ -88,6 +91,13 @@ where
             MaybeRawValue::Data(data) => data,
         }
     }
+
+    fn assert_raw_value(self) -> &'a RawValue {
+        match self {
+            MaybeRawValue::RawValue(s) => s,
+            MaybeRawValue::Data(_) => unreachable!("Expected RawValue, got Data"),
+        }
+    }
 }
 
 impl<T> Default for MaybeRawValue<'_, T>
@@ -99,33 +109,37 @@ where
     }
 }
 
+type Str = Arc<str>;
+
+type StrValue<'a> = MaybeRawValue<'a, Str>;
+
 #[derive(Debug)]
 pub struct SourceMap<'a> {
-    file: Option<&'a RawValue>,
+    file: Option<StrValue<'a>>,
     tokens: Vec<RawToken>,
-    names: MaybeRawValue<'a, Vec<&'a RawValue>>,
-    source_root: Option<&'a RawValue>,
-    sources: MaybeRawValue<'a, Vec<&'a RawValue>>,
-    sources_prefixed: Option<&'a RawValue>,
-    sources_content: MaybeRawValue<'a, Vec<Option<&'a RawValue>>>,
+    names: MaybeRawValue<'a, Vec<StrValue<'a>>>,
+    source_root: Option<StrValue<'a>>,
+    sources: MaybeRawValue<'a, Vec<StrValue<'a>>>,
+    sources_prefixed: Option<MaybeRawValue<'a, Vec<StrValue<'a>>>>,
+    sources_content: MaybeRawValue<'a, Vec<Option<StrValue<'a>>>>,
     ignore_list: Option<MaybeRawValue<'a, BTreeSet<u32>>>,
 }
 
 #[derive(Debug)]
-pub struct SourceMapBuilder<'a> {
-    file: Option<&'a RawValue>,
+pub(crate) struct SourceMapBuilder<'a> {
+    file: Option<StrValue<'a>>,
     name_map: HashMap<&'a str, u32>,
-    names: Vec<&'a RawValue>,
+    names: Vec<StrValue<'a>>,
     tokens: Vec<RawToken>,
     source_map: HashMap<&'a str, u32>,
-    sources: Vec<&'a RawValue>,
-    source_contents: Vec<Option<&'a RawValue>>,
-    source_root: Option<&'a RawValue>,
+    sources: Vec<StrValue<'a>>,
+    source_contents: Vec<Option<StrValue<'a>>>,
+    source_root: Option<StrValue<'a>>,
     ignore_list: Option<BTreeSet<u32>>,
 }
 
 impl<'a> SourceMapBuilder<'a> {
-    pub fn new(file: Option<&'a RawValue>) -> Self {
+    pub fn new(file: Option<StrValue<'a>>) -> Self {
         SourceMapBuilder {
             file,
             name_map: HashMap::new(),
@@ -145,7 +159,7 @@ impl<'a> SourceMapBuilder<'a> {
         let id = *self.source_map.entry(src_str).or_insert(count);
         if id == count {
             // New source
-            self.sources.push(src_raw);
+            self.sources.push(MaybeRawValue::RawValue(src_raw));
             // Ensure source_contents has a corresponding entry, defaulting to None.
             // This logic ensures source_contents is always same length as sources if new one added.
             self.source_contents.resize(self.sources.len(), None);
@@ -159,7 +173,7 @@ impl<'a> SourceMapBuilder<'a> {
         let id = *self.name_map.entry(name_str).or_insert(count);
         if id == count {
             // New name
-            self.names.push(name_raw);
+            self.names.push(MaybeRawValue::RawValue(name_raw));
         }
         id
     }
@@ -169,7 +183,7 @@ impl<'a> SourceMapBuilder<'a> {
         if (src_id as usize) >= self.source_contents.len() {
             self.source_contents.resize(src_id as usize + 1, None);
         }
-        self.source_contents[src_id as usize] = contents;
+        self.source_contents[src_id as usize] = contents.map(MaybeRawValue::RawValue);
     }
 
     pub fn add_raw_token(
@@ -201,7 +215,7 @@ impl<'a> SourceMapBuilder<'a> {
             .insert(src_id);
     }
 
-    pub fn set_source_root(&mut self, source_root: Option<&'a RawValue>) {
+    pub fn set_source_root(&mut self, source_root: Option<StrValue<'a>>) {
         self.source_root = source_root;
     }
 
@@ -294,7 +308,7 @@ impl<'a> SourceMapSection<'a> {
 
 #[derive(Debug)]
 pub struct SourceMapIndex<'a> {
-    file: Option<&'a RawValue>,
+    file: Option<MaybeRawValue<'a, Str>>,
     sections: Vec<SourceMapSection<'a>>,
 }
 
@@ -632,12 +646,12 @@ impl<'a> SourceMapIndex<'a> {
                 sources.into_iter().zip(source_contents).enumerate()
             {
                 debug_assert_eq!(original_id, src_id_map.len());
-                let src_id = builder.add_source(source);
+                let src_id = builder.add_source(source.assert_raw_value());
 
                 src_id_map.push(src_id);
 
                 if let Some(contents) = contents {
-                    builder.set_source_contents(src_id, Some(contents));
+                    builder.set_source_contents(src_id, Some(contents.assert_raw_value()));
                 }
             }
 
@@ -646,7 +660,7 @@ impl<'a> SourceMapIndex<'a> {
 
             for (original_id, name) in names.into_iter().enumerate() {
                 debug_assert_eq!(original_id, name_id_map.len());
-                let name_id = builder.add_name(name);
+                let name_id = builder.add_name(name.assert_raw_value());
                 name_id_map.push(name_id);
             }
 
@@ -781,4 +795,29 @@ fn serialize_mappings(sm: &SourceMap) -> String {
     }
 
     rv
+}
+
+impl From<crate::SourceMap> for SourceMap<'_> {
+    fn from(value: crate::SourceMap) -> Self {
+        SourceMap {
+            file: value.file.map(MaybeRawValue::Data),
+            tokens: value.tokens,
+            names: MaybeRawValue::Data(value.names.into_iter().map(MaybeRawValue::Data).collect()),
+            source_root: value.source_root.map(MaybeRawValue::Data),
+            sources: MaybeRawValue::Data(
+                value.sources.into_iter().map(MaybeRawValue::Data).collect(),
+            ),
+            sources_prefixed: value
+                .sources_prefixed
+                .map(|v| MaybeRawValue::Data(v.into_iter().map(MaybeRawValue::Data).collect())),
+            sources_content: MaybeRawValue::Data(
+                value
+                    .sources_content
+                    .into_iter()
+                    .map(|v| v.map(|v| v.source).map(MaybeRawValue::Data))
+                    .collect(),
+            ),
+            ignore_list: Some(MaybeRawValue::Data(value.ignore_list)),
+        }
+    }
 }
