@@ -4,13 +4,15 @@
 //!
 //! We skip deserializing all the fields that we don't need. (unlike the original crate)
 
-use crate::{vlq::parse_vlq_segment_into, Error, RawToken, Result};
-use std::{
-    collections::{BTreeSet, HashMap},
-    io,
+use crate::{
+    decoder::{decode_rmi, strip_junk_header},
+    encoder::{encode_rmi, encode_vlq_diff},
+    vlq::parse_vlq_segment_into,
+    Error, RawToken, Result,
 };
+use std::collections::{BTreeSet, HashMap};
 
-use bitvec::{field::BitField, order::Lsb0, vec::BitVec, view::BitView};
+use bitvec::{order::Lsb0, vec::BitVec, view::BitView};
 use serde::{Deserialize, Serialize};
 use serde_json::value::RawValue;
 
@@ -688,109 +690,6 @@ impl<'a> SourceMapIndex<'a> {
         }
 
         Ok(builder.into_sourcemap())
-    }
-}
-
-pub fn strip_junk_header(slice: &[u8]) -> io::Result<&[u8]> {
-    if slice.is_empty() || !is_junk_json(slice[0]) {
-        return Ok(slice);
-    }
-    let mut need_newline = false;
-    for (idx, &byte) in slice.iter().enumerate() {
-        if need_newline && byte != b'\n' {
-            Err(io::Error::new(
-                io::ErrorKind::InvalidData,
-                "expected newline",
-            ))?
-        } else if is_junk_json(byte) {
-            continue;
-        } else if byte == b'\r' {
-            need_newline = true;
-        } else if byte == b'\n' {
-            return Ok(&slice[idx..]);
-        }
-    }
-    Ok(&slice[slice.len()..])
-}
-
-fn is_junk_json(byte: u8) -> bool {
-    byte == b')' || byte == b']' || byte == b'}' || byte == b'\''
-}
-
-/// Decodes range mappping bitfield string into index
-fn decode_rmi(rmi_str: &str, val: &mut BitVec<u8, Lsb0>) -> Result<()> {
-    val.clear();
-    val.resize(rmi_str.len() * 6, false);
-
-    for (idx, &byte) in rmi_str.as_bytes().iter().enumerate() {
-        let byte = match byte {
-            b'A'..=b'Z' => byte - b'A',
-            b'a'..=b'z' => byte - b'a' + 26,
-            b'0'..=b'9' => byte - b'0' + 52,
-            b'+' => 62,
-            b'/' => 63,
-            _ => {
-                return Err(Error::InvalidBase64(byte as char));
-            }
-        };
-
-        val[6 * idx..6 * (idx + 1)].store_le::<u8>(byte);
-    }
-
-    Ok(())
-}
-
-const B64_CHARS: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-
-pub(crate) fn encode_vlq(out: &mut String, num: i64) {
-    let mut num = if num < 0 { ((-num) << 1) + 1 } else { num << 1 };
-
-    loop {
-        let mut digit = num & 0b11111;
-        num >>= 5;
-        if num > 0 {
-            digit |= 1 << 5;
-        }
-        out.push(B64_CHARS[digit as usize] as char);
-        if num == 0 {
-            break;
-        }
-    }
-}
-
-fn encode_vlq_diff(out: &mut String, a: u32, b: u32) {
-    encode_vlq(out, i64::from(a) - i64::from(b))
-}
-
-fn encode_rmi(out: &mut Vec<u8>, data: &[u8]) {
-    fn encode_byte(b: u8) -> u8 {
-        match b {
-            0..=25 => b + b'A',
-            26..=51 => b + b'a' - 26,
-            52..=61 => b + b'0' - 52,
-            62 => b'+',
-            63 => b'/',
-            _ => panic!("invalid byte"),
-        }
-    }
-
-    let bits = data.view_bits::<Lsb0>();
-
-    // trim zero at the end
-    let mut last = 0;
-    for (idx, bit) in bits.iter().enumerate() {
-        if *bit {
-            last = idx;
-        }
-    }
-    let bits = &bits[..last + 1];
-
-    for byte in bits.chunks(6) {
-        let byte = byte.load::<u8>();
-
-        let encoded = encode_byte(byte);
-
-        out.push(encoded);
     }
 }
 
