@@ -201,37 +201,10 @@ impl<'a> SourceMapBuilder<'a> {
         self.source_contents[src_id as usize] = contents.map(MaybeRawValue::RawValue);
     }
 
-    pub fn add_raw_token(
-        &mut self,
-        dst_line: u32,
-        dst_col: u32,
-        src_line: u32,
-        src_col: u32,
-        src_id: Option<u32>,
-        name_id: Option<u32>,
-        is_range: bool,
-    ) -> RawToken {
-        let token = RawToken {
-            dst_line,
-            dst_col,
-            src_line,
-            src_col,
-            src_id: src_id.unwrap_or(!0), // Use !0 as sentinel for None, common in sourcemap crate
-            name_id: name_id.unwrap_or(!0),
-            is_range,
-        };
-        self.tokens.push(token);
-        token
-    }
-
     pub fn add_to_ignore_list(&mut self, src_id: u32) {
         self.ignore_list
             .get_or_insert_with(BTreeSet::new)
             .insert(src_id);
-    }
-
-    pub fn set_source_root(&mut self, source_root: Option<StrValue<'a>>) {
-        self.source_root = source_root;
     }
 
     pub fn into_sourcemap(self) -> SourceMap<'a> {
@@ -300,24 +273,9 @@ impl<'a> SourceMapSection<'a> {
         }
     }
 
-    /// Returns the offset line
-    pub fn get_offset_line(&self) -> u32 {
-        self.offset.0
-    }
-
-    /// Returns the offset column
-    pub fn get_offset_col(&self) -> u32 {
-        self.offset.1
-    }
-
     /// Returns the offset as tuple
     pub fn get_offset(&self) -> (u32, u32) {
         self.offset
-    }
-
-    /// Updates the URL for this section.
-    pub fn set_url(&mut self, value: Option<&str>) {
-        self.url = value.map(str::to_owned).map(MaybeRawValue::Data);
     }
 }
 
