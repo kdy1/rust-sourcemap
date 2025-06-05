@@ -410,49 +410,8 @@ pub fn decode_regular(rsm: RawSourceMap) -> Result<SourceMap> {
 }
 
 impl<'a> SourceMap<'a> {
-    /// Adjusts the mappings in `self` using the mappings in `adjustment`.
-    ///
-    /// Here is the intended use case for this function:
-    /// * You have a source file (for example, minified JS) `foo.js` and a corresponding sourcemap
-    ///   `foo.js.map`.
-    /// * You modify `foo.js` in some way and generate a sourcemap `transform.js.map` representing
-    ///   this modification. This can be done using `magic-string`, for example.
-    /// * You want a sourcemap that is "like" `foo.js.map`, but takes the changes you made to
-    ///   `foo.js` into account.
-    ///
-    /// Then `foo.js.map.adjust_mappings(transform.js.map)` is the desired sourcemap.
-    ///
-    /// This function assumes that `adjustment` contains no relevant information except for
-    /// mappings.  All information about sources and names is copied from `self`.
-    ///
-    /// Note that the resulting sourcemap will be at most as fine-grained as `self.`.
+    /// Refer to [crate::SourceMap::adjust_mappings] for more details.
     pub fn adjust_mappings(&mut self, adjustment: crate::SourceMap) {
-        // The algorithm works by going through the tokens in `self` in order and adjusting
-        // them depending on the token in `adjustment` they're "covered" by.
-        // For example:
-        // Let `l` be a token in `adjustment` mapping `(17, 23)` to `(8, 30)` and let
-        // `r₁ : (8, 28) -> (102, 35)`, `r₂ : (8, 40) -> (102, 50)`, and
-        // `r₃ : (9, 10) -> (103, 12)` be the tokens in `self` that fall in the range of `l`.
-        // `l` offsets these tokens by `(+9, -7)`, so `r₁, … , r₃` must be offset by the same
-        // amount. Thus, the adjusted sourcemap will contain the tokens
-        // `c₁ : (17, 23) -> (102, 35)`, `c₂ : (17, 33) -> (102, 50)`, and
-        // `c3 : (18, 3) -> (103, 12)`.
-        //
-        // Or, in diagram form:
-        //
-        //    (17, 23)                                    (position in the edited source file)
-        //    ↓ l
-        //    (8, 30)
-        // (8, 28)        (8, 40)        (9, 10)          (positions in the original source file)
-        // ↓ r₁           ↓ r₂           ↓ r₃
-        // (102, 35)      (102, 50)      (103, 12)        (positions in the target file)
-        //
-        // becomes
-        //
-        //    (17, 23)       (17, 33)       (18, 3)       (positions in the edited source file)
-        //    ↓ c₁           ↓ c₂           ↓ c₃
-        //    (102, 35)      (102, 50)      (103, 12)     (positions in the target file)
-
         // Helper struct that makes it easier to compare tokens by the start and end
         // of the range they cover.
         #[derive(Debug, Clone, Copy)]
