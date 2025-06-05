@@ -1,8 +1,4 @@
-//! This is forked from rust-sourcemap crate.
-//!
-//! https://github.com/getsentry/rust-sourcemap/tree/696899f4ca92f1fc133237c74ca1a54cf7448e49
-//!
-//! We skip deserializing all the fields that we don't need. (unlike the original crate)
+//! This is _lazy_ because we skip deserializing all the fields that we don't need. (unlike the original crate)
 
 use crate::{
     decoder::{decode_rmi, strip_junk_header},
