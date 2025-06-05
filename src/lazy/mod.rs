@@ -16,7 +16,7 @@ use std::{
 };
 
 use bitvec::{order::Lsb0, vec::BitVec, view::BitView};
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::value::RawValue;
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -73,11 +73,25 @@ impl<'a> DecodedMap<'a> {
     }
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Serialize)]
 #[serde(untagged)]
 pub(crate) enum MaybeRawValue<'a, T> {
     RawValue(#[serde(borrow)] &'a RawValue),
     Data(T),
+}
+
+impl<'a, 'de, T> Deserialize<'de> for MaybeRawValue<'a, T>
+where
+    'de: 'a,
+    T: Deserialize<'de>,
+{
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let raw: &'de RawValue = Deserialize::deserialize(deserializer)?;
+        Ok(MaybeRawValue::RawValue(raw))
+    }
 }
 
 impl<'a, T> MaybeRawValue<'a, T>
