@@ -20,6 +20,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::value::RawValue;
 
 #[derive(Serialize, Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
 pub struct RawSourceMap<'a> {
     pub(crate) version: Option<u32>,
     #[serde(default, borrow)]
