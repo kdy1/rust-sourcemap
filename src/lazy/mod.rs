@@ -135,7 +135,6 @@ pub struct SourceMap<'a> {
     names: MaybeRawValue<'a, Vec<StrValue<'a>>>,
     source_root: Option<StrValue<'a>>,
     sources: MaybeRawValue<'a, Vec<StrValue<'a>>>,
-    sources_prefixed: Option<MaybeRawValue<'a, Vec<StrValue<'a>>>>,
     sources_content: MaybeRawValue<'a, Vec<Option<StrValue<'a>>>>,
     ignore_list: Option<MaybeRawValue<'a, BTreeSet<u32>>>,
 }
@@ -214,7 +213,6 @@ impl<'a> SourceMapBuilder<'a> {
             names: MaybeRawValue::Data(self.names),
             source_root: self.source_root,
             sources: MaybeRawValue::Data(self.sources),
-            sources_prefixed: None,
             sources_content: MaybeRawValue::Data(self.source_contents),
             ignore_list: self.ignore_list.map(MaybeRawValue::Data),
         }
@@ -408,7 +406,6 @@ pub fn decode_regular(rsm: RawSourceMap) -> Result<SourceMap> {
         names: rsm.names,
         source_root: rsm.source_root,
         sources: rsm.sources,
-        sources_prefixed: None,
         sources_content: rsm.sources_content,
         ignore_list: rsm.ignore_list,
     };
