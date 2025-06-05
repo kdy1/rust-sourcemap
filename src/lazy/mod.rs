@@ -29,11 +29,11 @@ pub struct RawSourceMap<'a> {
     pub(crate) sources: MaybeRawValue<'a, Vec<StrValue<'a>>>,
     #[serde(default, borrow)]
     pub(crate) source_root: Option<StrValue<'a>>,
-    #[serde(borrow)]
+    #[serde(default, borrow)]
     pub(crate) sources_content: MaybeRawValue<'a, Vec<Option<StrValue<'a>>>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) sections: Option<Vec<RawSection<'a>>>,
-    #[serde(borrow)]
+    #[serde(default, borrow)]
     pub(crate) names: MaybeRawValue<'a, Vec<StrValue<'a>>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) range_mappings: Option<String>,
