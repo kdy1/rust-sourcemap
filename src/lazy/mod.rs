@@ -433,7 +433,7 @@ impl<'a> SourceMap<'a> {
     /// mappings.  All information about sources and names is copied from `self`.
     ///
     /// Note that the resulting sourcemap will be at most as fine-grained as `self.`.
-    pub fn adjust_mappings(&mut self, adjustment: Self) {
+    pub fn adjust_mappings(&mut self, adjustment: crate::SourceMap) {
         // The algorithm works by going through the tokens in `self` in order and adjusting
         // them depending on the token in `adjustment` they're "covered" by.
         // For example:
@@ -768,29 +768,4 @@ fn serialize_mappings(sm: &SourceMap) -> String {
     }
 
     rv
-}
-
-impl From<crate::SourceMap> for SourceMap<'_> {
-    fn from(value: crate::SourceMap) -> Self {
-        SourceMap {
-            file: value.file.map(MaybeRawValue::Data),
-            tokens: value.tokens,
-            names: MaybeRawValue::Data(value.names.into_iter().map(MaybeRawValue::Data).collect()),
-            source_root: value.source_root.map(MaybeRawValue::Data),
-            sources: MaybeRawValue::Data(
-                value.sources.into_iter().map(MaybeRawValue::Data).collect(),
-            ),
-            sources_prefixed: value
-                .sources_prefixed
-                .map(|v| MaybeRawValue::Data(v.into_iter().map(MaybeRawValue::Data).collect())),
-            sources_content: MaybeRawValue::Data(
-                value
-                    .sources_content
-                    .into_iter()
-                    .map(|v| v.map(|v| v.source).map(MaybeRawValue::Data))
-                    .collect(),
-            ),
-            ignore_list: Some(MaybeRawValue::Data(value.ignore_list)),
-        }
-    }
 }
